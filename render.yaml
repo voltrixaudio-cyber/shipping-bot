@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: ai-shipping-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn bot:app --bind 0.0.0.0:$PORT & python bot.py"
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DELHIVERY_API_TOKEN
+        sync: false
+      - key: DELHIVERY_API_URL
+        value: https://staging-express.delhivery.com # Or production URL if preferred
