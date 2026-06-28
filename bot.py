@@ -84,14 +84,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.edit_text("Checking serviceability... 🔍")
         
-        # is_serviceable = delhivery.check_serviceability(details['delivery_pincode'])
-
-        # if not is_serviceable:
-
-        #     await status_msg.edit_text(f"Sorry, pincode {details['delivery_pincode']} is not serviceable. ❌")
-
-        #     return
-
 
 
         # Step 4: Get Shipping Costs
@@ -170,7 +162,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not details:
         
-        await query.edit_message_text("Session expired. Please sen
+        await query.edit_message_text("Session expired. Please send details again.")
+        
+        return
+        
+
+
+    await query.edit_message_text(f"Creating shipment ({'Express' if mode == 'E' else 'Surface'})... 📦")
+    
+
+
+    # Step 6: Create Shipment
+
+    result = delhivery.create_shipment(details, mode)
+    
+
+
+    if result['success']:
+        
+        response = (
+            
+            f"🎉 *
+
+
+
+
+
+
 
 
 
