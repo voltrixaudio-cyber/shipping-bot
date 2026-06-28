@@ -10,5 +10,3 @@ Flask
 
 gunicorn
 
-httpx==0.27.0
-
