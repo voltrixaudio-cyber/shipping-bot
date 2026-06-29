@@ -13,22 +13,27 @@ class AIParser:
         
         Required JSON format:
         {{
-          "pickup_pincode": int,
-          "delivery_pincode": int,
-          "weight_grams": int,
-          "receiver_name": "string",
-          "receiver_phone": "string",
-          "pickup_address": "string",
-          "delivery_address": "string"
+          "pickup_pincode": int or null,
+          "delivery_pincode": int or null,
+          "weight_grams": int or null,
+          "receiver_name": "string or null",
+          "receiver_phone": "string or null",
+          "pickup_address": "string or null",
+          "delivery_address": "string or null"
         }}
         
-        Note: Convert weight to grams (e.g., 2.5kg = 2500). If any detail is missing, use null.
+        Rules for extraction:
+        1. **Weight:** Convert to grams. If "100g" is mentioned, use 100. If "2.5kg" is mentioned, use 2500.
+        2. **Pincodes:** Look for 6-digit Indian pincodes. If a pincode is near the word "pickup" or "from", map it to "pickup_pincode".
+        3. **Receiver:** Extract the person's name and phone number if provided.
+        4. **Addresses:** Extract full address strings if possible.
+        5. **Nulls:** If any detail is absolutely not found, use null.
         """
         
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that parses shipping details into structured JSON."},
+                {"role": "system", "content": "You are a professional logistics assistant that extracts shipping data with 100% accuracy into JSON format."},
                 {"role": "user", "content": prompt}
             ],
             response_format={ "type": "json_object" }

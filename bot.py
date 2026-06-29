@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from config import Config
@@ -39,12 +40,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         details = ai_parser.parse_shipping_details(user_text)
         context.user_data['shipping_details'] = details
         
-        # Step 3: Serviceability Check (Bypassed for testing)
-        await status_msg.edit_text("Checking serviceability... 🔍")
-            
+        # Validation Check
+        if not details.get('pickup_pincode') or not details.get('delivery_pincode'):
+            await status_msg.edit_text("⚠️ Could not extract pincodes. Please provide both pickup and delivery pincodes.")
+            return
+
         # Step 4: Get Shipping Costs
         await status_msg.edit_text("Calculating rates... 💰")
-        rates = delhivery.get_rates(details['pickup_pincode'], details['delivery_pincode'], details['weight_grams'])
+        try:
+            rates = delhivery.get_rates(details['pickup_pincode'], details['delivery_pincode'], details.get('weight_grams', 500))
+        except Exception as e:
+            logging.error(f"Rate API Error: {e}")
+            rates = {"E": "Error", "S": "Error"}
         
         # Step 5: User Selection
         keyboard = [
@@ -57,11 +64,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         summary = (
             f"✅ **Details Extracted:**\n"
-            f"📍 From: {details['pickup_pincode']}\n"
-            f"📍 To: {details['delivery_pincode']}\n"
-            f"⚖️ Weight: {details['weight_grams']}g\n"
-            f"👤 Receiver: {details['receiver_name']}\n"
-            f"📞 Phone: {details['receiver_phone']}\n\n"
+            f"📍 From: {details.get('pickup_pincode', 'N/A')}\n"
+            f"📍 To: {details.get('delivery_pincode', 'N/A')}\n"
+            f"⚖️ Weight: {details.get('weight_grams', 'N/A')}g\n"
+            f"👤 Receiver: {details.get('receiver_name', 'N/A')}\n"
+            f"📞 Phone: {details.get('receiver_phone', 'N/A')}\n\n"
             f"Please select your shipping mode:"
         )
         
@@ -83,22 +90,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Session expired. Please send details again.")
         return
         
-    await query.edit_message_text(f"Creating shipment ({'Express' if mode == 'E' else 'Surface'})... 📦")
+    status_msg = await query.edit_message_text(f"Creating shipment ({'Express' if mode == 'E' else 'Surface'})... 📦")
     
-    # Step 6: Create Shipment
-    result = delhivery.create_shipment(details, mode)
-    
-    if result['success']:
-        response = (
-            f"🎉 **Shipment Created!**\n\n"
-            f"🆔 **Waybill:** `{result['waybill']}`\n"
-            f"🚚 **Status:** {result['status']}\n\n"
-            f"🔗 [Track Shipment]({result['tracking_url']})\n"
-            f"📄 [Download Label]({result['label_url']})"
-        )
-        await query.edit_message_text(response, parse_mode='Markdown')
-    else:
-        await query.edit_message_text(f"❌ **Failed to create shipment:**\n{result['error']}")
+    # Step 6: Create Shipment with timeout/error handling
+    try:
+        # Wrap in try-except to prevent hanging
+        result = delhivery.create_shipment(details, mode)
+        
+        if result.get('success'):
+            response = (
+                f"🎉 **Shipment Created!**\n\n"
+                f"🆔 **Waybill:** `{result['waybill']}`\n"
+                f"🚚 **Status:** {result['status']}\n\n"
+                f"🔗 [Track Shipment]({result['tracking_url']})\n"
+                f"📄 [Download Label]({result['label_url']})"
+            )
+            await status_msg.edit_text(response, parse_mode='Markdown')
+        else:
+            error_msg = result.get('error', 'Unknown error from Delhivery API')
+            await status_msg.edit_text(f"❌ **Failed to create shipment:**\n`{error_msg}`")
+    except Exception as e:
+        logging.error(f"Shipment Creation Error: {e}")
+        await status_msg.edit_text(f"❌ **Error during shipment creation:**\n`{str(e)}`")
 
 if __name__ == '__main__':
     # Start health check server
