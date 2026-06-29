@@ -28,13 +28,15 @@ class DelhiveryClient:
         url = f"https://track.delhivery.com/api/kinko/v1/invoice/charges/.json"
         
         rates = {}
+        pickup_location_name = Config.DELHIVERY_PICKUP_LOCATION_NAME
         for mode in ["E", "S"]:
             params = {
                 "md": mode,
                 "ss": "Delivered",
                 "o_pin": o_pin,
                 "d_pin": d_pin,
-                "cgm": weight_grams
+                "cgm": weight_grams,
+                "client": pickup_location_name
             }
             response = requests.get(url, params=params, headers=self.headers)
             if response.status_code == 200:
@@ -62,7 +64,7 @@ class DelhiveryClient:
                 "shipping_mode": "Express" if mode == "E" else "Surface"
             }],
             "pickup_location": {
-                "name": details["pickup_address"],
+                "name": pickup_location_name,
                 "pin": details["pickup_pincode"]
             }
         }

@@ -14,6 +14,7 @@ class Config:
     
     # Use staging by default for safety unless explicitly set
     DELHIVERY_BASE_URL = os.getenv("DELHIVERY_API_URL", DELHIVERY_STAGING_URL)
+    DELHIVERY_PICKUP_LOCATION_NAME = os.getenv("DELHIVERY_PICKUP_LOCATION_NAME", "Shop no. 2")
 
     @classmethod
     def validate(cls):
@@ -21,6 +22,7 @@ class Config:
         if not cls.TELEGRAM_BOT_TOKEN: missing.append("TELEGRAM_BOT_TOKEN")
         if not cls.OPENAI_API_KEY: missing.append("OPENAI_API_KEY")
         if not cls.DELHIVERY_API_TOKEN: missing.append("DELHIVERY_API_TOKEN")
+        if not cls.DELHIVERY_PICKUP_LOCATION_NAME: missing.append("DELHIVERY_PICKUP_LOCATION_NAME")
         
         if missing:
             raise ValueError(f"Missing environment variables: {', '.join(missing)}")
