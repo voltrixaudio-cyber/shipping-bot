@@ -3,6 +3,9 @@ import json
 import logging
 from config import Config
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 class DelhiveryClient:
     def __init__(self):
         self.token = Config.DELHIVERY_API_TOKEN
@@ -11,17 +14,22 @@ class DelhiveryClient:
             "Authorization": f"Token {self.token}",
             "Content-Type": "application/json"
         }
+        logging.info(f"Initialized DelhiveryClient with base_url: {self.base_url}")
 
     def check_serviceability(self, pincode):
         url = f"{self.base_url}/c/api/pin-codes/json/"
         params = {"filter_codes": pincode}
         try:
+            logging.info(f"Checking serviceability for pincode: {pincode}")
             response = requests.get(url, params=params, headers=self.headers, timeout=10)
+            logging.info(f"Serviceability Response Status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
                 for item in data.get("delivery_codes", []):
                     if str(item.get("postal_code")) == str(pincode):
+                        logging.info(f"Pincode {pincode} is serviceable.")
                         return True
+            logging.warning(f"Pincode {pincode} is not serviceable or API error.")
         except Exception as e:
             logging.error(f"Serviceability Check Error: {e}")
         return False
@@ -32,6 +40,8 @@ class DelhiveryClient:
         
         rates = {}
         pickup_location_name = Config.DELHIVERY_PICKUP_LOCATION_NAME
+        logging.info(f"Fetching rates from {o_pin} to {d_pin} for {weight_grams}g using client '{pickup_location_name}'")
+        
         for mode in ["E", "S"]:
             params = {
                 "md": mode,
@@ -43,6 +53,7 @@ class DelhiveryClient:
             }
             try:
                 response = requests.get(url, params=params, headers=self.headers, timeout=10)
+                logging.info(f"Rates API Response ({mode}): Status {response.status_code}, Content: {response.text}")
                 if response.status_code == 200:
                     data = response.json()
                     if isinstance(data, list) and len(data) > 0:
@@ -50,7 +61,6 @@ class DelhiveryClient:
                     else:
                         rates[mode] = "N/A"
                 else:
-                    logging.error(f"Rates API Status Code {response.status_code}: {response.text}")
                     rates[mode] = "Error"
             except Exception as e:
                 logging.error(f"Rates API Error for mode {mode}: {e}")
@@ -78,6 +88,8 @@ class DelhiveryClient:
             }
         }
         
+        logging.info(f"Creating shipment at {url} with payload: {json.dumps(payload)}")
+        
         try:
             data = f"format=json&data={json.dumps(payload)}"
             headers = {
@@ -86,10 +98,11 @@ class DelhiveryClient:
             }
             
             response = requests.post(url, data=data, headers=headers, timeout=15)
+            logging.info(f"Create Shipment Response: Status {response.status_code}, Content: {response.text}")
+            
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
-                    # Extract waybill from the first shipment
                     packages = result.get("packages", [])
                     waybill = packages[0].get("waybill") if packages else "N/A"
                     return {
@@ -100,9 +113,10 @@ class DelhiveryClient:
                         "label_url": f"https://track.delhivery.com/api/p/labels/print/json/?waybills={waybill}"
                     }
                 else:
-                    return {"success": False, "error": result.get("errors", ["API error"])[0]}
+                    error_msg = result.get("errors", ["API error"])[0]
+                    return {"success": False, "error": error_msg}
             else:
-                return {"success": False, "error": f"Status {response.status_code}"}
+                return {"success": False, "error": f"HTTP Status {response.status_code}"}
         except Exception as e:
             logging.error(f"Create Shipment Exception: {e}")
             return {"success": False, "error": str(e)}
