@@ -1,42 +1,287 @@
 import json
-from openai import OpenAI
-from config import Config
+
+import logging
+
+import time
+
+from typing import Dict, Any, Optional
+
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+
+
+logger = logging.getLogger(__name__)
+
+
+
+
 
 class AIParser:
-    def __init__(self):
-        self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    
+    """Parse shipping details using OpenAI's GPT-4o model"""
+    
 
-    def parse_shipping_details(self, text):
-        prompt = f"""
-        Extract shipping details from the following text and return a JSON object.
-        Text: "{text}"
+
+    def __init__(self, model: str = "gpt-4o", max_retries: int = 3):
         
-        Required JSON format:
-        {{
-          "pickup_pincode": int or null,
-          "delivery_pincode": int or null,
-          "weight_grams": int or null,
-          "receiver_name": "string or null",
-          "receiver_phone": "string or null",
-          "pickup_address": "string or null",
-          "delivery_address": "string or null"
-        }}
-        
-        Rules for extraction:
-        1. **Weight:** Convert to grams. If "100g" is mentioned, use 100. If "2.5kg" is mentioned, use 2500.
-        2. **Pincodes:** Look for 6-digit Indian pincodes. If a pincode is near the word "pickup" or "from", map it to "pickup_pincode".
-        3. **Receiver:** Extract the person's name and phone number if provided.
-        4. **Addresses:** Extract full address strings if possible.
-        5. **Nulls:** If any detail is absolutely not found, use null.
         """
         
-        response = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a professional logistics assistant that extracts shipping data with 100% accuracy into JSON format."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={ "type": "json_object" }
-        )
+        Initialize AI Parser.
         
-        return json.loads(response.choices[0].message.content)
+
+
+        Args:
+        
+            model: OpenAI model to use
+            
+            max_retries: Number of times to retry on transient failures
+            
+        """
+        
+        from config import Config
+        
+
+
+        self.client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        
+        self.model = model
+        
+        self.max_retries = max_retries
+        
+
+
+        logger.info(f"✅ AIParser initialized | Model: {model} | Retries: {max_retries}")
+        
+
+
+    def parse_shipping_details(self, user_text: str) -> Dict[str, Any]:
+        
+        """
+        
+        Extract shipping details from user input using AI.
+        
+
+
+        Args:
+        
+            user_text: User's message containing shipping details
+            
+
+
+        Returns:
+        
+            Dictionary with parsed shipping details
+            
+
+
+        Raises:
+        
+            ValueError: If parsing fails after retries
+            
+        """
+        
+        if not user_text or not user_text.strip():
+            
+            logger.error("Empty input text")
+            
+            raise ValueError("Input text cannot be empty")
+            
+
+
+        logger.info(f"🤖 Parsing shipping details from text ({len(user_text)} chars)")
+        
+
+
+        prompt = self._build_prompt(user_text)
+        
+
+
+        for attempt in range(1, self.max_retries + 1):
+            
+            try:
+                
+                logger.debug(f"OpenAI API call attempt {attempt}/{self.max_retries}")
+                
+
+
+                response = self.client.chat.completions.create(
+                    
+                    model=self.model,
+                    
+                    messages=[
+                        
+                        {
+                            
+                            "role": "system",
+                            
+                            "content": (
+                                
+                                "You are a professional logistics assistant that extracts "
+                                
+                                "shipping data with 100% accuracy into JSON format. "
+                                
+                                "Always return valid JSON only, no additional text."
+                                
+                            ),
+                            
+                        },
+                        
+                        {"role": "user", "content": prompt},
+                        
+                    ],
+                    
+                    response_format={"type": "json_object"},
+                    
+                    temperature=0.3,
+                    
+                    timeout=30,
+                    
+                )
+                
+
+
+                if not response or not response.choices:
+                    
+                    logger.error(
+                        
+                        f"❌ Empty choices in OpenAI response (attempt {attempt})"
+                        
+                    )
+                    
+                    if attempt == self.max_retries:
+                        
+                        raise ValueError(
+                            
+                            "AI parsing failed: No choices returned from OpenAI."
+                            
+                        )
+                        
+                    time.sleep(1)
+                    
+                    continue
+                    
+
+
+                content = response.choices[0].message.content
+                
+
+
+                if not content:
+                    
+                    logger.error(
+                        
+                        f"❌ Empty/None content from OpenAI (attempt {attempt})"
+                        
+                    )
+                    
+                    if attempt == self.max_retries:
+                        
+                        raise ValueError(
+                            
+                            "AI parsing failed: Empty response from OpenAI."
+                            
+                        )
+                        
+                    time.sleep(1)
+                    
+                    continue
+                    
+
+
+                logger.debug(f"Raw OpenAI response: {content[:200]}...")
+                
+
+
+                parsed = json.loads(content)
+                
+                logger.info(f"✅ Successfully parsed shipping details")
+                
+                logger.debug(f"Parsed data: {parsed}")
+                
+
+
+                return parsed
+                
+
+
+            except json.JSONDecodeError as e:
+                
+                logger.error(
+                    
+                    f"❌ Invalid JSON from OpenAI (attempt {attempt}): {e}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
